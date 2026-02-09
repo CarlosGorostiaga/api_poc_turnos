@@ -1,0 +1,13 @@
+services:
+  backend:
+    build: .
+    environment:
+      DB_HOST: shortline.proxy.rlwy.net
+      DB_PORT: 36109
+      DB_NAME: poc_turnos
+      DB_USER: postgres
+      DB_PASSWORD: "xVMOQRqzGVQCubGdGWhGGOOBmIlmAHLk"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/app/src
