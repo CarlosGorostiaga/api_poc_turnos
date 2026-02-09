@@ -58,8 +58,8 @@ const create = async (req, res) => {
     const { fecha, ubicacion, turnos } = req.body;
 
     // turnos: [
-    //   { turno: "manana", capacidad: 4 },
-    //   { turno: "tarde", capacidad: 4 }
+    //   { turno: "mañana", capacidad: 3 },
+    //   { turno: "tarde", capacidad: 3 }
     // ]
 
     if (!fecha || !ubicacion) {
@@ -92,7 +92,7 @@ const create = async (req, res) => {
           VALUES ($1, $2, $3)
           RETURNING *
         `,
-          [pocDiaId, turno.turno, turno.capacidad || 4],
+          [pocDiaId, turno.turno, turno.capacidad || 3], // ← CAMBIO AQUÍ: de 4 a 3
         );
 
         turnosCreados.push(turnoResult.rows[0]);

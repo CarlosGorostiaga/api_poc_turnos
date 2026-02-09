@@ -278,6 +278,12 @@ async function validarAsignacion(client, asignacion, fecha, turno) {
       };
     }
 
+    // Obtener nombre del segundo publicador
+    const pub2 = await client.query(
+      "SELECT nombre FROM publicadores WHERE id = $1",
+      [publicador2_id],
+    );
+
     return {
       valido: true,
       slots_ocupados: 2,
@@ -285,7 +291,7 @@ async function validarAsignacion(client, asignacion, fecha, turno) {
         tipo: "matrimonio",
         publicador1_id: publicador_id,
         publicador2_id: publicador2_id,
-        nombres: [publicador.nombre],
+        nombres: [publicador.nombre, pub2.rows[0].nombre], // ← FIX: ambos nombres
       },
     };
   }
@@ -387,20 +393,20 @@ const sugerirAsignacion = async (req, res) => {
             SELECT COUNT(*)
             FROM poc_turnos pt2
             JOIN poc_dia pd2 ON pt2.poc_dia_id = pd2.id
-            WHERE pd2.fecha >= $2 - INTERVAL '30 days'
-              AND pd2.fecha < $2
+            WHERE pd2.fecha >= $1::date - INTERVAL '30 days'
+              AND pd2.fecha < $1::date
               AND pt2.asignados::text LIKE '%' || p.id::text || '%'
           ) as veces_asignado
         FROM publicadores p
         LEFT JOIN publicadores pareja ON p.pareja_id = pareja.id
         LEFT JOIN disponibilidad d ON d.publicador_id = p.id 
-          AND d.fecha = $2
-          AND d.turno = $3
+          AND d.fecha = $1::date
+          AND d.turno = $2
         WHERE p.activo = true
           AND COALESCE(d.disponible, true) = true
         ORDER BY veces_asignado ASC, RANDOM()
       `,
-        [poc_turno_id, turno.fecha, turno.turno],
+        [turno.fecha, turno.turno],
       );
 
       // Algoritmo de sugerencia con prioridad a menos asignados
@@ -476,8 +482,73 @@ const sugerirAsignacion = async (req, res) => {
   }
 };
 
+/**
+ * Limpiar asignaciones de un turno
+ */
+const limpiarTurno = async (req, res) => {
+  try {
+    const { poc_turno_id } = req.params;
+
+    const result = await db.query(
+      `
+      UPDATE poc_turnos
+      SET asignados = '[]'::jsonb,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING *
+    `,
+      [poc_turno_id],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Turno no encontrado" });
+    }
+
+    res.json({
+      message: "Turno limpiado exitosamente",
+      turno: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const actualizarTurno = async (req, res) => {
+  try {
+    const { poc_turno_id } = req.params;
+    const { capacidad, bloqueado } = req.body;
+
+    const result = await db.query(
+      `
+      UPDATE poc_turnos
+      SET capacidad = COALESCE($1, capacidad),
+          bloqueado = COALESCE($2, bloqueado),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING *
+    `,
+      [capacidad, bloqueado, poc_turno_id],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Turno no encontrado" });
+    }
+
+    res.json({
+      message: "Turno actualizado exitosamente",
+      turno: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getPublicadoresDisponibles,
   asignarTurno,
   sugerirAsignacion,
+  limpiarTurno,
+  actualizarTurno,
 };
